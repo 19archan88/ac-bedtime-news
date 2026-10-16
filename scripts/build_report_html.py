@@ -52,6 +52,13 @@ def build(source, output=None, headline=None, audience="parent"):
         "@@JS@@": (web / "report.js").read_text(encoding="utf-8"),
     }
     result = re.sub(r"@@[A-Z]+@@", lambda m: replacements[m.group(0)], template)
+    # Keep full license notices with redistributed inline code without adding visible UI.
+    notices = {name: (ROOT / name).read_text(encoding="utf-8") for name in (
+        "LICENSE", "THIRD_PARTY_NOTICES.md", "assets/web/vendor/marked-LICENSE.md",
+        "assets/web/vendor/html2canvas-LICENSE.txt")}
+    license_data = json.dumps(notices, ensure_ascii=True).replace("<", "\\u003c")
+    result = result.replace("</body>", '<script type="application/json" id="ac-bedtime-license-notices">'
+                            + license_data + '</script>\n</body>')
     output = Path(output).resolve() if output else source.with_suffix(".html")
     if output.suffix.lower() != ".html" or output == source:
         raise ValueError("Output must be an HTML file distinct from the source.")
