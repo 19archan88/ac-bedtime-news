@@ -1,0 +1,23 @@
+{
+  "prompt_version": "v2.0",
+  "last_updated": null,
+  "processed": {
+    "daily": [],
+    "weekly": [],
+    "monthly": [],
+    "yearly": []
+  },
+  "pending_confirmation": [],
+  "sediment": {
+    "red_flags": [],
+    "watchlist": [],
+    "repair_debts": [],
+    "milestones": []
+  },
+  "archive": {
+    "local_path": "",
+    "cloud_path": "",
+    "notes": ""
+  },
+  "notes": ""
+}

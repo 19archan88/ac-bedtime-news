@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Read-only Friday-anchored periods and child context. Python standard library only."""
+
+import argparse
+import calendar
+from datetime import date, timedelta
+import json
+import re
+import sys
+
+
+def parse_date(value):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("Date must use YYYY-MM-DD")
+    return date.fromisoformat(value)
+
+
+def add_months(start, months):
+    total = start.year * 12 + start.month - 1 + months
+    year, month0 = divmod(total, 12)
+    month = month0 + 1
+    return date(year, month, min(start.day, calendar.monthrange(year, month)[1]))
+
+
+def elapsed(start, end):
+    if end < start:
+        raise ValueError("End date precedes start date")
+    months = (end.year - start.year) * 12 + end.month - start.month
+    if add_months(start, months) > end:
+        months -= 1
+    anniversary = add_months(start, months)
+    return {"years": months // 12, "months": months % 12,
+            "total_months": months, "days": (end - anniversary).days,
+            "total_days": (end - start).days}
+
+
+def week_context(day):
+    anchor = day + timedelta(days=(4 - day.weekday()) % 7)
+    start = anchor - timedelta(days=6)
+    iso_year, iso_week, _ = anchor.isocalendar()
+    key = f"{iso_year:04d}-W{iso_week:02d}"
+    return {"start": start.isoformat(), "end": anchor.isoformat(),
+            "anchor_friday": anchor.isoformat(), "weekly_key": key,
+            "report_id": f"W-{key}", "belongs_to_month": anchor.strftime("%Y-%m"),
+            "belongs_to_year": f"{anchor.year:04d}",
+            "daily_dates": [(start + timedelta(days=i)).isoformat() for i in range(7)]}
+
+
+def month_context(value):
+    if not re.fullmatch(r"\d{4}-\d{2}", value):
+        raise ValueError("Month must use YYYY-MM")
+    first = date.fromisoformat(value + "-01")
+    last = calendar.monthrange(first.year, first.month)[1]
+    weeks = [week_context(date(first.year, first.month, n))
+             for n in range(1, last + 1)
+             if date(first.year, first.month, n).weekday() == 4]
+    return {"monthly_key": value, "report_id": f"M-{value}",
+            "start": weeks[0]["start"], "end": weeks[-1]["end"],
+            "last_anchor_friday": weeks[-1]["anchor_friday"],
+            "expected_weekly_keys": [w["weekly_key"] for w in weeks], "weeks": weeks}
+
+
+def year_context(value):
+    if not re.fullmatch(r"\d{4}", value) or not 2 <= int(value) <= 9998:
+        raise ValueError("Year must be four digits in 0002..9998")
+    months = [month_context(f"{value}-{n:02d}") for n in range(1, 13)]
+    return {"yearly_key": value, "report_id": f"Y-{value}",
+            "start": months[0]["start"], "end": months[-1]["end"],
+            "expected_monthly_keys": [m["monthly_key"] for m in months],
+            "months": [{k: m[k] for k in ("monthly_key", "start", "end",
+                        "last_anchor_friday", "expected_weekly_keys")} for m in months]}
+
+
+def child_context(day, birth=None, school_start=None):
+    if birth is not None and school_start is not None and school_start < birth:
+        raise ValueError("School start precedes birth")
+    age = elapsed(birth, day) if birth is not None else None
+    school = None
+    if school_start is not None:
+        if day < school_start:
+            school = {"enrolled": False, "grade": None,
+                      "days_until_start": (school_start - day).days}
+        else:
+            school = {"enrolled": True, "grade": None,
+                      "elapsed": elapsed(school_start, day),
+                      "elapsed_day_convention": "入学当日已过0天；不含起始日"}
+    return {"birth_date": birth.isoformat() if birth is not None else None,
+            "age": age,
+            "age_label": f"{age['years']}岁{age['months']}个月" if age is not None else None,
+            "school_start": school_start.isoformat() if school_start is not None else None,
+            "school": school}
+
+
+def date_context(value, birth=None, school_start=None):
+    day = parse_date(value)
+    if not 2 <= day.year <= 9998:
+        raise ValueError("Date year must be in 0002..9998")
+    week = week_context(day)
+    anchor = parse_date(week["anchor_friday"])
+    month = month_context(week["belongs_to_month"])
+    last_friday = anchor.isoformat() == month["last_anchor_friday"]
+    return {"date": value, "daily_key": value, "report_id": f"D-{value}",
+            "prompt_version": "v2.0", "week": week,
+            "child": child_context(day, birth, school_start),
+            "calendar_conditions_only": {
+                "is_anchor_friday": day == anchor,
+                "is_last_anchor_friday_of_month": day == anchor and last_friday,
+                "is_last_anchor_friday_of_year": day == anchor and last_friday and anchor.month == 12},
+            "notice": "日历条件不等于报告完成、材料齐全或家长授权；必须另行检查。"}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("date", "month", "year"))
+    parser.add_argument("value")
+    parser.add_argument("--birth-date", help="Optional confirmed birth date (YYYY-MM-DD)")
+    parser.add_argument("--school-start", help="Optional confirmed school entry date (YYYY-MM-DD)")
+    args = parser.parse_args(argv)
+    try:
+        if args.mode == "date":
+            result = date_context(args.value, parse_date(args.birth_date) if args.birth_date else None,
+                                  parse_date(args.school_start) if args.school_start else None)
+        elif args.mode == "month":
+            result = month_context(args.value)
+        else:
+            result = year_context(args.value)
+    except (ValueError, OverflowError) as exc:
+        parser.error(str(exc))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    main()

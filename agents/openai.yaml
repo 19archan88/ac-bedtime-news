@@ -1,0 +1,4 @@
+interface:
+  display_name: "ac-bedtime-news"
+  short_description: "分析亲子睡前对话，默认交付文字、Markdown 与离线 HTML"
+  default_prompt: "请使用 $ac-bedtime-news 分析我提供的睡前对话；若我未指定格式，直接交付完整文字报告、Markdown 和可按需导出 PDF、PNG 的离线 HTML，并更新状态。"

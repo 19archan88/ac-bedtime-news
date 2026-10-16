@@ -1,0 +1,12 @@
+{
+  "knowledge_version": "K-v1",
+  "last_updated": null,
+  "transferable": {
+    "child_dictionary": [],
+    "traits_and_preferences": []
+  },
+  "private": {
+    "parent_hook_profile": [],
+    "sensitive_map": []
+  }
+}
