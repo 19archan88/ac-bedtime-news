@@ -5,6 +5,7 @@ import argparse
 import calendar
 from datetime import date, timedelta
 import json
+from pathlib import Path
 import re
 import sys
 
@@ -71,10 +72,68 @@ def year_context(value):
                         "last_anchor_friday", "expected_weekly_keys")} for m in months]}
 
 
-def child_context(day, birth=None, school_start=None):
+def grade_context(day, baselines):
+    """Use the latest confirmed baseline, preserving earlier school history."""
+    if not baselines:
+        return None
+    applicable = []
+    seen = set()
+    for baseline in baselines:
+        effective = parse_date(baseline['effective_date'])
+        if effective in seen:
+            raise ValueError('Duplicate school baseline date')
+        seen.add(effective)
+        index = baseline['grade_index']
+        if type(index) is not int or index < 1:
+            raise ValueError('grade_index must be a positive integer')
+        promotion = baseline['promotion_day']
+        if not re.fullmatch(r'\d{2}-\d{2}', promotion):
+            raise ValueError('promotion_day must use MM-DD')
+        boundary = parse_date('2001-' + promotion)  # Must exist every year.
+        stages = baseline['stages']
+        if not stages or any(not s['name'] or type(s['years']) is not int or s['years'] < 1 for s in stages):
+            raise ValueError('Each school stage needs a name and positive years')
+        if index > sum(s['years'] for s in stages):
+            raise ValueError('Baseline grade exceeds configured school stages')
+        if effective <= day:
+            applicable.append((effective, baseline, boundary))
+    if not applicable:
+        return None
+    effective, baseline, boundary = max(applicable, key=lambda item: item[0])
+    mmdd = (boundary.month, boundary.day)
+    academic = lambda d: d.year - ((d.month, d.day) < mmdd)
+    index = baseline['grade_index'] + academic(day) - academic(effective)
+    remaining = index
+    label = None
+    for stage in baseline['stages']:
+        if remaining <= stage['years']:
+            label = f"{stage['name']}{remaining}年级"
+            break
+        remaining -= stage['years']
+    return {'grade': label, 'school_year_index': index,
+            'baseline_date': effective.isoformat(),
+            'status': 'projected' if label else 'beyond_configured_stages',
+            'notice': '依据家长确认的学籍基准和升年级规则推算；实际学籍变动以家长校正为准。'}
+
+
+def child_context(day, birth=None, school_start=None, profile=None):
+    profile = profile or {}
     if birth is not None and school_start is not None and school_start < birth:
         raise ValueError("School start precedes birth")
     age = elapsed(birth, day) if birth is not None else None
+    age_label = f"{age['years']}岁{age['months']}个月" if age is not None else None
+    age_precision = 'birth_date' if age is not None else None
+    reference = profile.get('age_reference')
+    if age is None and reference:
+        reference_day = parse_date(reference['as_of'])
+        years, months = reference['years'], reference['months']
+        if type(years) is not int or years < 0 or type(months) is not int or not 0 <= months < 12:
+            raise ValueError('Age reference needs nonnegative years and months in 0..11')
+        if day >= reference_day:
+            total = years * 12 + months + elapsed(reference_day, day)['total_months']
+            age = {'years': total // 12, 'months': total % 12, 'total_months': total}
+            age_label = f"约{age['years']}岁{age['months']}个月"
+            age_precision = 'approximate_reference'
     school = None
     if school_start is not None:
         if day < school_start:
@@ -84,14 +143,20 @@ def child_context(day, birth=None, school_start=None):
             school = {"enrolled": True, "grade": None,
                       "elapsed": elapsed(school_start, day),
                       "elapsed_day_convention": "入学当日已过0天；不含起始日"}
+    grade = grade_context(day, profile.get('school_baselines'))
+    if grade is not None:
+        if school_start is not None and day < school_start:
+            raise ValueError('School baseline conflicts with school entry date')
+        school = school or {'enrolled': True, 'elapsed': None}
+        school.update(grade)
     return {"birth_date": birth.isoformat() if birth is not None else None,
             "age": age,
-            "age_label": f"{age['years']}岁{age['months']}个月" if age is not None else None,
+            "age_label": age_label, "age_precision": age_precision,
             "school_start": school_start.isoformat() if school_start is not None else None,
             "school": school}
 
 
-def date_context(value, birth=None, school_start=None):
+def date_context(value, birth=None, school_start=None, profile=None):
     day = parse_date(value)
     if not 2 <= day.year <= 9998:
         raise ValueError("Date year must be in 0002..9998")
@@ -101,7 +166,7 @@ def date_context(value, birth=None, school_start=None):
     last_friday = anchor.isoformat() == month["last_anchor_friday"]
     return {"date": value, "daily_key": value, "report_id": f"D-{value}",
             "prompt_version": "v2.0", "week": week,
-            "child": child_context(day, birth, school_start),
+            "child": child_context(day, birth, school_start, profile),
             "calendar_conditions_only": {
                 "is_anchor_friday": day == anchor,
                 "is_last_anchor_friday_of_month": day == anchor and last_friday,
@@ -115,16 +180,33 @@ def main(argv=None):
     parser.add_argument("value")
     parser.add_argument("--birth-date", help="Optional confirmed birth date (YYYY-MM-DD)")
     parser.add_argument("--school-start", help="Optional confirmed school entry date (YYYY-MM-DD)")
+    parser.add_argument('--profile', help='Private FAMILY-profile.json path')
+    parser.add_argument('--child-id', help='Required when the family profile contains multiple children')
     args = parser.parse_args(argv)
     try:
         if args.mode == "date":
-            result = date_context(args.value, parse_date(args.birth_date) if args.birth_date else None,
-                                  parse_date(args.school_start) if args.school_start else None)
+            profile = {}
+            if args.profile:
+                family = json.loads(Path(args.profile).read_text(encoding='utf-8-sig'))
+                children = family['children']
+                ids = [c['id'] for c in children]
+                if len(ids) != len(set(ids)):
+                    raise ValueError('Child IDs must be unique')
+                matches = [c for c in children if c['id'] == args.child_id] if args.child_id else children
+                if len(matches) != 1:
+                    raise ValueError('Select exactly one child with --child-id')
+                profile = matches[0]
+            elif args.child_id:
+                raise ValueError('--child-id requires --profile')
+            birth = args.birth_date or profile.get('birth_date')
+            school_start = args.school_start or profile.get('school_start')
+            result = date_context(args.value, parse_date(birth) if birth else None,
+                                  parse_date(school_start) if school_start else None, profile)
         elif args.mode == "month":
             result = month_context(args.value)
         else:
             result = year_context(args.value)
-    except (ValueError, OverflowError) as exc:
+    except (ValueError, OverflowError, OSError, KeyError, TypeError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

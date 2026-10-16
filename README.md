@@ -22,7 +22,7 @@ git clone https://github.com/19archan88/ac-bedtime-news.git
 
 ## 第一次使用
 
-提供对话日期、匿名化逐字稿、参与对话者的角色，以及你愿意提供的孩子年龄或生日、学段信息。家长备注可选。生日、入学日期和年级没有默认值，未提供的信息不会凭空推算。
+提供对话日期、匿名化逐字稿、参与对话者的角色，以及你愿意提供的孩子年龄或生日、学段信息。家长备注可选。首次启动会提醒设置孩子及家庭成员信息，并保存到私有的 `FAMILY-profile.json`。根据用户设置的生日或年龄基准、入学日期、年级基准和每年升级规则，自动推算对应报告日期的年龄、入学时长和年级；未知资料不填默认家庭值。详见 [家庭设置指南](references/family-setup.md)。
 
 示例请求（请替换为自己的材料）：
 
@@ -36,7 +36,7 @@ git clone https://github.com/19archan88/ac-bedtime-news.git
 - 本仓库只含指令、空模板、渲染资源与测试；测试日期和示例不代表任何使用者的家庭资料。
 - 转写和云存档需要用户另外提供材料或接入工具；技能不会凭空获得这些能力。
 - 心理学视角用于形成有依据的观察与讨论，不作诊断。推断须与事实、原话分开。
-- 周期按周六至周五计算，周五决定该周的月、年归属。年级依据家长提供的学籍，日期工具不假设当地学制。
+- 周期按周六至周五计算，周五决定该周的月、年归属。年级按家长确认的学籍基准、升级日期和学制自动推算；留级、跳级等变化按新的生效日期保存，历史报告沿用当时规则。
 
 ## 本地工具
 
@@ -45,6 +45,7 @@ git clone https://github.com/19archan88/ac-bedtime-news.git
 ```sh
 python scripts/calendar_context.py date 2030-05-17
 python scripts/calendar_context.py date 2030-05-17 --birth-date 2023-04-12 --school-start 2029-08-20
+python scripts/calendar_context.py date 2030-05-17 --profile /private/FAMILY-profile.json --child-id child-1
 python scripts/calendar_context.py month 2030-05
 python scripts/calendar_context.py year 2030
 python scripts/build_report_html.py /path/to/private/D-2030-05-17.md
