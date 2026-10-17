@@ -73,3 +73,5 @@ python scripts/calendar_context.py date 2030-08-20 --profile /private/FAMILY-pro
 ```
 
 对于该虚构示例，生日计算为 7 岁 4 个月、年级推算为小学 2 年级。多孩子必须指定 `--child-id`，不会默认选择第一位。
+
+正式入口 `prepare_report.py` 的重复生成会沿用显示参数并核对缓存，但每次仍先执行初始化检查；临时模式同样保留私有渲染回执，不创建家庭配置。回执位置与重试边界见 [HTML 交付规范](html-delivery.md#命令行重试与私有渲染回执)。
