@@ -18,7 +18,7 @@
 git clone https://github.com/19archan88/ac-bedtime-news.git
 ```
 
-技能由支持读取 Skill 指令和本地文件的 AI Agent 执行。两个 Python 工具使用 Python 3 标准库，无须额外 Python 依赖；HTML 阅读及导出需要现代浏览器，相关 JavaScript 库已随包提供。
+技能由支持读取 Skill 指令和本地文件的 AI Agent 执行。Python 工具使用 Python 3 标准库，无须额外 Python 依赖；HTML 阅读及导出需要现代浏览器，相关 JavaScript 库已随包提供。
 
 ## 第一次使用
 
@@ -48,17 +48,28 @@ python scripts/calendar_context.py date 2030-05-17 --birth-date 2023-04-12 --sch
 python scripts/calendar_context.py date 2030-05-17 --profile /private/FAMILY-profile.json --child-id child-1
 python scripts/calendar_context.py month 2030-05
 python scripts/calendar_context.py year 2030
-python scripts/build_report_html.py /path/to/private/D-2030-05-17.md
+python scripts/profile_store.py status --archive /path/to/private --child-id child-1
+python scripts/prepare_report.py /path/to/private/D-2030-05-17.md --archive /path/to/private --child-id child-1
 ```
 
-第二条命令仅为虚构参数示例。日期工具不传家庭参数时仍可计算报告周期，未知的家庭字段返回 `null`。HTML 工具将已有 Markdown 转为阅读版，不会自行生成分析或更新档案。
+第二条命令仅为虚构参数示例。日期工具不传家庭参数时仍可计算报告周期，未知的家庭字段返回 `null`。正式报告入口检查初始化状态，未回应时停止并提示补充；档案更新命令见家庭设置指南。底层 build_report_html.py 只负责排版，不代表已完成初始化。用户明确选择临时模式可使用 `--temporary --onboarding-acknowledged`，不创建家庭档案。
+
+完整虚构示例见 [Markdown](examples/D-2030-05-17.md) 与 [离线 HTML](examples/D-2030-05-17.html)。增强排版初始化失败时仍可阅读完整文字原稿。
+
+日报时间线用简短标签辅助浏览，重要解释与事实边界保留在正常字号的正文中。加粗集中于关键句，较长分析按议题分段；具体约定见 [HTML 编排规范](references/html-delivery.md#原稿编排)。既有报告不会因标签较长而被自动截断。
 
 运行维护测试：
 
 ```sh
 python -m unittest discover -s scripts -p "test_*.py"
 node scripts/test_png_encoder.cjs
+npm install
+npm run test:presentation
 ```
+
+后两条仅供维护者运行 DOM 集成测试，需要 Node.js 18 或更新版本；开发依赖不会进入离线 HTML，也不是使用技能的前置条件。可用 `PYTHON` 环境变量指定 Python 可执行文件。DOM 测试核对实际生成页面的结构和内容，不能替代真实浏览器的布局、打印与 PNG 导出检查。
+
+呈现层以随包原有设计为基础，保留必要修复和纯文本故障回退；输入约定与各周期示例的适用范围见 [HTML 规范](references/html-delivery.md#markdown-与渲染器的约定)。提示词版本保持 `v2.0`，独立视觉版本以构建器中的 `renderVersion` 为准。
 
 ## 文件导航
 
@@ -90,3 +101,7 @@ Copyright (c) 2026 阿昌 (19archan88)。公众号：阿昌正传。
 ### 使用说明
 
 本 Skill 提供亲子对话整理与观察辅助，不能替代医疗、心理诊断或专业服务，也不承诺特定成长结果。发布问题反馈或改进建议时，请使用虚构或充分匿名化的材料，不上传真实家庭档案。
+
+## 本次维护更新（2026-10-18）
+
+视觉版本 `2.4.3`：加深小号橙色信息文字及编号，保留原有布局、正文和装饰配色。公开示例已使用当前构建器重新生成。源码与自动化测试不能代替真实浏览器和导出文件的视觉验收。

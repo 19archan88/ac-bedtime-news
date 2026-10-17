@@ -1,5 +1,5 @@
 {
-  "profile_version": "1.0",
+  "profile_version": "2.0",
   "last_updated": null,
   "children": [
     {
@@ -9,10 +9,19 @@
       "birth_date": null,
       "age_reference": null,
       "school_start": null,
-      "school_baselines": []
+      "school_baselines": [],
+      "school_observation": null,
+      "onboarding": {
+        "decisions": {}
+      }
     }
   ],
   "family_members": [],
   "default_participants": [],
-  "archive_path": null
+  "archive_path": null,
+  "timezone": null,
+  "onboarding": {
+    "acknowledged": false,
+    "decisions": {}
+  }
 }

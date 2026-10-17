@@ -1,6 +1,21 @@
 # 首次设置与个性化推算
 
-首次启动且当前私有档案不存在 `FAMILY-profile.json` 时，必须提醒用户自定义孩子及家庭成员信息。先吸收用户已经提供的资料，再集中询问缺项，不把初始化变成每次报告的重复问卷。
+每次启动先执行状态检查，缺文件、空模板、未回应的缺项都不能视为完成。先吸收用户已经提供的资料，再集中询问缺项，不把初始化变成每次报告的重复问卷。强制的是引导和记录用户选择，不是强迫填写隐私。
+
+## 可执行流程
+
+1. 从当前项目约定或用户提供的位置定位私有档案；位置不明确时询问，不搜索其他家庭。确认是否长期保存及报告时区。跨设备需要用户同步私有档案，技能安装本身不携带记忆。
+2. 运行 `python scripts/profile_store.py status --archive /private/family --child-id child-1`。`ready: false` 时先完成引导并等待回应。
+3. 用户提供或确认的信息整理为私有 JSON 补丁，运行 `python scripts/profile_store.py update --archive /private/family --patch /private/update.json --confirmed`。此标志只能代表真实用户确认，不能由 agent 代填同意。
+4. 补丁使用稳定孩子 id；children/family_members 按 id 合并，普通字段合并，school_baselines 按 effective_date 合并并保留历史，其他数组为显式替换。补丁不得含 family_id、revision 等系统管理字段。成功后回读档案并简要说明更新了什么；补丁临时文件按用户私有资料管理。
+5. `onboarding.acknowledged: true` 只在用户实际回应后设置。缺项可由用户选择 deferred 或 declined，写入 `onboarding.decisions`；家庭级键包括 timezone、family_members；孩子级 alias、age、school 推荐写入该孩子的 onboarding.decisions，多孩子时必须逐人记录，不能用一个孩子的暂缓选择代替其他孩子。不能擅自把未回应变为暂缓。目标孩子必须明确，未指定代号可在引导后用“孩子”。
+6. 正式报告运行 `python scripts/prepare_report.py /private/D-2030-05-17.md --archive /private/family --child-id child-1`。输出到 `children/child-1/reports/`；对应 Markdown、状态和知识也须按孩子隔离维护。
+7. 用户明确选择临时分析时运行 `python scripts/prepare_report.py /private/D-2030-05-17.md --temporary --onboarding-acknowledged`，不创建家庭档案。未完成引导不能使用此开关绕过。
+8. 后续消息新增资料时立即保存，不等待报告生成。已选择暂缓的资料不每次重复问，只有影响本次判断或用户主动补充时再处理。
+
+`school_observation: {as_of, label}` 保存不具备升级规则的当前学籍事实；不会据此自动升级。只有年龄年数时允许 `age_reference.months: null`，保留精度限制。出生及学籍校正应在私有记录中保留原因和用户确认来源，不能用推测覆盖事实。
+
+程序能约束使用上述入口的流程，但无法约束完全忽略 Skill 的第三方 agent。没有文件写入权限时需明确“未保存”，不能声称跨会话已记住。
 
 可直接这样提示：
 

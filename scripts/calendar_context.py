@@ -126,10 +126,13 @@ def child_context(day, birth=None, school_start=None, profile=None):
     reference = profile.get('age_reference')
     if age is None and reference:
         reference_day = parse_date(reference['as_of'])
-        years, months = reference['years'], reference['months']
-        if type(years) is not int or years < 0 or type(months) is not int or not 0 <= months < 12:
+        years, months = reference['years'], reference.get('months')
+        if type(years) is not int or years < 0 or (months is not None and (type(months) is not int or not 0 <= months < 12)):
             raise ValueError('Age reference needs nonnegative years and months in 0..11')
-        if day >= reference_day:
+        if day >= reference_day and months is None:
+            age_label = f"截至{reference_day.isoformat()}为{years}岁（月数未知）；当前精确年龄待确认"
+            age_precision = 'years_only_reference'
+        elif day >= reference_day:
             total = years * 12 + months + elapsed(reference_day, day)['total_months']
             age = {'years': total // 12, 'months': total % 12, 'total_months': total}
             age_label = f"约{age['years']}岁{age['months']}个月"
@@ -149,6 +152,12 @@ def child_context(day, birth=None, school_start=None, profile=None):
             raise ValueError('School baseline conflicts with school entry date')
         school = school or {'enrolled': True, 'elapsed': None}
         school.update(grade)
+    observation = profile.get('school_observation')
+    if observation and parse_date(observation['as_of']) <= day:
+        school = school or {'enrolled': None, 'grade': None}
+        school['confirmed_observation'] = observation
+        if observation['as_of'] == day.isoformat():
+            school.update(grade=observation['label'], status='confirmed_on_report_date')
     return {"birth_date": birth.isoformat() if birth is not None else None,
             "age": age,
             "age_label": age_label, "age_precision": age_precision,
@@ -206,6 +215,26 @@ def main(argv=None):
             result = month_context(args.value)
         else:
             result = year_context(args.value)
+        if args.mode != 'date' and (args.profile or args.birth_date or args.school_start or args.child_id):
+            profile = {}
+            if args.profile:
+                family = json.loads(Path(args.profile).read_text(encoding='utf-8-sig'))
+                children = family['children']
+                ids = [c['id'] for c in children]
+                if len(ids) != len(set(ids)):
+                    raise ValueError('Child IDs must be unique')
+                matches = [c for c in children if c['id'] == args.child_id] if args.child_id else children
+                if len(matches) != 1:
+                    raise ValueError('Select exactly one child with --child-id')
+                profile = matches[0]
+            elif args.child_id:
+                raise ValueError('--child-id requires --profile')
+            birth = args.birth_date or profile.get('birth_date')
+            school_start = args.school_start or profile.get('school_start')
+            result['child_context_date'] = result['end']
+            result['child'] = child_context(parse_date(result['end']),
+                parse_date(birth) if birth else None,
+                parse_date(school_start) if school_start else None, profile)
     except (ValueError, OverflowError, OSError, KeyError, TypeError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, ensure_ascii=False, indent=2))

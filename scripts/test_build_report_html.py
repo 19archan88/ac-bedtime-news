@@ -41,7 +41,9 @@ class ReportBuilderTests(unittest.TestCase):
             result=build(source,headline='</script><img src=x onerror=alert(1)>')
             data=settings(result)
             self.assertEqual(base64.b64decode(data['markdownBase64']).decode(),raw)
-            self.assertNotIn('window.pwned=1',result.read_text(encoding='utf-8'))
+            rendered = result.read_text(encoding='utf-8')
+            self.assertNotIn('<script>window.pwned=1</script>', rendered)
+            self.assertIn('&lt;script&gt;window.pwned=1&lt;/script&gt;', rendered)
 
     def test_annual_period_not_first_quoted_date(self):
         with tempfile.TemporaryDirectory() as folder:

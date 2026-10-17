@@ -19,6 +19,17 @@ def baseline(effective='2029-08-20', index=1, promotion='08-20'):
 
 
 class FamilyTests(unittest.TestCase):
+    def test_years_only_age_and_current_school_observation(self):
+        value = child_context(date(2030, 5, 17), profile={
+            'age_reference': {'as_of': '2030-01-01', 'years': 7, 'months': None},
+            'school_observation': {'as_of': '2030-05-17', 'label': '小学一年级'}})
+        self.assertIsNone(value['age'])
+        self.assertEqual(value['age_precision'], 'years_only_reference')
+        self.assertEqual(value['school']['grade'], '小学一年级')
+        later = child_context(date(2030, 9, 1), profile={
+            'school_observation': {'as_of': '2030-05-17', 'label': '小学一年级'}})
+        self.assertIsNone(later['school']['grade'])
+
     def test_custom_promotion_and_stage_transitions(self):
         rules = [baseline()]
         self.assertIsNone(grade_context(date(2029, 8, 19), rules))

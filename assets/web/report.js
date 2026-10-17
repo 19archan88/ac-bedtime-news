@@ -89,7 +89,10 @@
         const time = document.createElement('time'); time.textContent = timeMatch[1];
         const title = document.createElement('strong'); title.textContent = timeMatch[2];
         item.append(time);heading.append(title);
-      } else heading.textContent = cells[0].textContent;
+      } else {
+        item.classList.add('without-time');
+        heading.innerHTML = cells[0].innerHTML;
+      }
       const body = document.createElement('p'); body.innerHTML = cells[1].innerHTML;
       const tags = document.createElement('p'); tags.className = 'moment-tags'; tags.innerHTML = cells[2].innerHTML;
       const copy=document.createElement('div');copy.className='moment-copy';copy.append(heading,body,tags);
@@ -97,12 +100,22 @@
     }
     table.replaceWith(key,timeline);
   }
-  for(const item of chapters.querySelectorAll('.quotes > ul > li')){
-    const quote=item.querySelector(':scope > strong');
-    if(!quote)continue;
-    const note=document.createElement('span');note.className='quote-note';
-    while(quote.nextSibling)note.append(quote.nextSibling);
-    item.append(note);
+  // Preserve the original quote/note columns only when both parts exist.
+  for (const item of chapters.querySelectorAll('.quotes > ul > li')) {
+    if (item.children.length === 1 && item.firstElementChild.tagName === 'P') {
+      const paragraph = item.firstElementChild;
+      paragraph.replaceWith(...paragraph.childNodes);
+    }
+    const quote = item.querySelector(':scope > strong');
+    if (!quote) continue;
+    const before = [...item.childNodes].slice(0, [...item.childNodes].indexOf(quote));
+    if (before.some(node => node.textContent.trim())) continue;
+    before.forEach(node => node.remove());
+    const note = document.createElement('div'); note.className = 'quote-note';
+    while (quote.nextSibling) note.append(quote.nextSibling);
+    if (note.textContent.trim()) {
+      item.classList.add('split-quote'); item.append(note);
+    } else item.append(...note.childNodes);
   }
   // Standard Markdown headings define groups; no inference or rewritten source text.
   for (const chapter of chapters.children) {
@@ -123,6 +136,12 @@
         if (/安全|风险|红旗|校准|边界|警示/.test(label)) group.classList.add('is-key');
         subsection.append(group); group.append(node);
       } else if (group !== chapter) group.append(node);
+    }
+  }
+  for (const list of chapters.querySelectorAll('.posture > ol')) {
+    list.style.counterReset = `posture ${list.start - 1}`;
+    for (const item of list.children) {
+      if (item.hasAttribute('value')) item.style.counterSet = `posture ${item.value}`;
     }
   }
   const sourceLink = document.getElementById('save-markdown');
@@ -177,7 +196,7 @@
     try{
       await new Promise((resolve,reject)=>{
         stage.onload=resolve;stage.onerror=()=>reject(new Error('Export viewport failed'));
-        stage.srcdoc='<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>'+
+        stage.srcdoc='<!doctype html><html lang="zh-CN" data-report-ready="true"><head><meta charset="utf-8"><style>'+
           document.querySelector('style').textContent+
           '.paper{width:900px!important;max-width:none;margin:0;box-shadow:none}body{margin:0;background:var(--paper)}</style></head><body>'+
           markup.outerHTML+'</body></html>';
